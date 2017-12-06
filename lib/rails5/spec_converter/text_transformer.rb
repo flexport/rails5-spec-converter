@@ -46,7 +46,6 @@ module Rails5
           end
           next unless args.length > 0
           next unless target.nil? && HTTP_VERBS.include?(verb)
-          puts target, verb, action, *args
 
           if args[0].hash_type?
             if args[0].children.length == 0
