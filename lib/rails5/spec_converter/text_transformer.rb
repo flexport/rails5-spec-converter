@@ -51,6 +51,21 @@ module Rails5
             if args[0].children.length == 0
               wrap_arg(args[0], 'params')
             end
+
+            next if looks_like_route_definition?(args[0])
+            next if has_key?(args[0], :params)
+            hash_rewriter = HashRewriter.new(
+              content: @content,
+              options: @options,
+              hash_node: args[0],
+              original_indent: line_indent(node),
+              xhr_node: xhr_node
+            )
+
+            @source_rewriter.replace(
+              args[0].loc.expression,
+              hash_rewriter.rewritten_params_hash
+            ) if hash_rewriter.should_rewrite_hash?
           elsif args[0].nil_type? && args.length > 1
             nil_arg_range = Parser::Source::Range.new(
               @source_buffer,
@@ -63,21 +78,6 @@ module Rails5
           end
 
           wrap_extra_positional_args!(args) if args.length > 1
-
-          next if looks_like_route_definition?(args[0])
-          next if has_key?(args[0], :params)
-          hash_rewriter = HashRewriter.new(
-            content: @content,
-            options: @options,
-            hash_node: args[0],
-            original_indent: line_indent(node),
-            xhr_node: xhr_node
-          )
-
-          @source_rewriter.replace(
-            args[0].loc.expression,
-            hash_rewriter.rewritten_params_hash
-          ) if hash_rewriter.should_rewrite_hash?
         end
 
         @source_rewriter.process
