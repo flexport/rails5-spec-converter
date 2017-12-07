@@ -416,6 +416,50 @@ describe Rails5::SpecConverter::TextTransformer do
     end
   end
 
+  describe 'xhr requests' do
+    it 'converts xhr requests to requests with xhr: true' do
+      result = transform(<<-RUBY.strip_heredoc)
+        let(:perform_request) do
+          xhr :get, :index, some: param
+        end
+      RUBY
+
+      expect(result).to eq(<<-RUBY.strip_heredoc)
+        let(:perform_request) do
+          get :index, params: { some: param }, xhr: true
+        end
+      RUBY
+    end
+
+    it 'converts existing params named xhr to hash' do
+      result = transform(<<-RUBY.strip_heredoc)
+        let(:perform_request) do
+          get :index, xhr: true
+        end
+      RUBY
+
+      expect(result).to eq(<<-RUBY.strip_heredoc)
+        let(:perform_request) do
+          get :index, params: { xhr: true }
+        end
+      RUBY
+    end
+
+    it 'converts xhr requests with existing xhr: true' do
+      result = transform(<<-RUBY.strip_heredoc)
+        let(:perform_request) do
+          xhr :get, :index, xhr: true
+        end
+      RUBY
+
+      expect(result).to eq(<<-RUBY.strip_heredoc)
+        let(:perform_request) do
+          get :index, params: { xhr: true }, xhr: true
+        end
+      RUBY
+    end
+  end
+
   describe 'optional configuration' do
     it 'allows a custom indent to be set' do
       options = TextTransformerOptions.new

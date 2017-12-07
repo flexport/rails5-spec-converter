@@ -5,13 +5,13 @@ class HashRewriter
 
   attr_reader :hash_node, :original_indent
 
-  def initialize(content:, hash_node:, original_indent:, options:)
+  def initialize(content:, hash_node:, original_indent:, options:, xhr_node: nil)
     @options = options
     @content = content
     @hash_node = hash_node
     @original_indent = original_indent
     @textifier = NodeTextifier.new(@content)
-    partition_params(@hash_node)
+    partition_params(@hash_node, xhr_node)
   end
 
   def rewritten_params_hash
@@ -66,7 +66,7 @@ class HashRewriter
       )
     end
 
-    rewritten_hashes.join(first_joiner_between_pairs)
+    rewritten_hashes.join(first_joiner_between_pairs || ", ")
   end
 
   def should_rewrite_hash?
@@ -89,10 +89,11 @@ class HashRewriter
 
   private
 
-  def partition_params(hash_node)
+  def partition_params(hash_node, xhr_node)
     @pairs_that_belong_in_params = []
     @pairs_that_belong_outside_params = []
 
+    return unless hash_node
     hash_node.children.each do |pair|
       key = pair.children[0].children[0]
 
@@ -101,6 +102,9 @@ class HashRewriter
       else
         @pairs_that_belong_in_params << pair
       end
+    end
+    if xhr_node
+      @pairs_that_belong_outside_params << xhr_node.children.first
     end
   end
 

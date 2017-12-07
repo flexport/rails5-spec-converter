@@ -1,4 +1,5 @@
 require 'parser/current'
+require 'byebug'
 require 'astrolabe/builder'
 require 'rails5/spec_converter/test_type_identifier'
 require 'rails5/spec_converter/text_transformer_options'
@@ -31,29 +32,40 @@ module Rails5
         end
 
         root_node.each_node(:send) do |node|
-          target, verb, action, *args = node.children
+          children = node.children
+          next unless children.length > 1
+          if children[1] == :xhr
+            target, xhr, verb_expr, action, *args = children
+            next unless xhr && verb_expr.sym_type?
+            verb = verb_expr.children[0]
+            replace_xhr_verb(node, verb)
+            xhr_node = Parser::CurrentRuby.parse("{xhr: true}")
+          else
+            xhr = nil
+            target, verb, action, *args = children
+          end
           next unless args.length > 0
           next unless target.nil? && HTTP_VERBS.include?(verb)
 
           if args[0].hash_type?
             if args[0].children.length == 0
               wrap_arg(args[0], 'params')
-            else
-              next if looks_like_route_definition?(args[0])
-              next if has_key?(args[0], :params)
-
-              hash_rewriter = HashRewriter.new(
-                content: @content,
-                options: @options,
-                hash_node: args[0],
-                original_indent: line_indent(node)
-              )
-
-              @source_rewriter.replace(
-                args[0].loc.expression,
-                hash_rewriter.rewritten_params_hash
-              ) if hash_rewriter.should_rewrite_hash?
             end
+
+            next if looks_like_route_definition?(args[0])
+            next if has_key?(args[0], :params)
+            hash_rewriter = HashRewriter.new(
+              content: @content,
+              options: @options,
+              hash_node: args[0],
+              original_indent: line_indent(node),
+              xhr_node: xhr_node
+            )
+
+            @source_rewriter.replace(
+              args[0].loc.expression,
+              hash_rewriter.rewritten_params_hash
+            ) if hash_rewriter.should_rewrite_hash?
           elsif args[0].nil_type? && args.length > 1
             nil_arg_range = Parser::Source::Range.new(
               @source_buffer,
@@ -116,6 +128,15 @@ module Rails5
           node_source = "{ #{node_source} }"
         end
         @source_rewriter.replace(node_loc, "#{key}: #{node_source}")
+      end
+
+      def replace_xhr_verb(node, verb)
+        node_loc = node.loc.expression
+        node_source = node_loc.source
+        spacing = node_source.gsub(/\Axhr([\s(]*):.*/, '\1')
+        verb_size = node_source[/\Axhr([\s(]*):#{verb},\s*/].size
+        node_loc = node_loc.resize(verb_size)
+        @source_rewriter.replace(node_loc, verb.to_s + spacing)
       end
 
       def line_indent(node)
